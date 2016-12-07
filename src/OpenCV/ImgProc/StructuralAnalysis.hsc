@@ -10,15 +10,21 @@ module OpenCV.ImgProc.StructuralAnalysis
     , ContourRetrievalMode(..)
     , ContourApproximationMethod(..)
     , minAreaRect
+
+    , Connectivity(..)
+    , connectedComponents
+
     ) where
 
 import "primitive" Control.Monad.Primitive ( PrimMonad, PrimState, unsafePrimToPrim )
 import "base" Control.Exception ( mask_ )
 import "base" Control.Monad (guard)
+import "base" Control.Applicative (liftA2)
 import "base" Data.Functor (($>))
 import "base" Data.Int
 import "base" Data.Maybe (mapMaybe)
 import "base" Data.Traversable (for)
+import "base" Data.Proxy (Proxy(..))
 import qualified "vector" Data.Vector as V
 import "base" Data.Word
 import "base" Foreign.C.Types
@@ -315,3 +321,37 @@ minAreaRect points =
       }
     |]
   where c'numPoints = fromIntegral (V.length points)
+
+
+data Connectivity = Connected4 | Connected8 deriving (Show, Eq, Ord, Enum)
+
+connectedSize :: Connectivity -> Int
+connectedSize Connected4 = 4
+connectedSize Connected8 = 8
+
+connectedComponents :: forall height width depth.
+    (ToDepth (Proxy depth), depth `In` '[Word16, Int32])
+    => Mat ('S [height, width]) ('S 1) ('S Word8) -- ^ Image.
+    -> Connectivity -- ^ Connectivity, 4 or 8.
+    -> CvExcept ( Int
+                , Mat ('S [height, width]) ('S 1) ('S depth)
+                )
+connectedComponents img connectivity = unsafeWrapException $ do
+    labels <- newEmptyMat
+    withPtr img $ \imgPtr ->
+      withPtr labels $ \labelsPtr ->
+      alloca $ \(numPtsPtr :: Ptr Int32) -> do
+
+        handleCvException ((, unsafeCoerceMat labels) <$>
+            (fromIntegral <$> peek numPtsPtr))
+          [cvExcept|
+            *$(int32_t * numPtsPtr) = cv::connectedComponents
+              ( *$(Mat *   imgPtr)
+              , *$(Mat *   labelsPtr)
+              , $(int32_t c'connectivity)
+              , $(int32_t c'labelType)
+              );
+          |]
+      where
+        c'connectivity = fromIntegral (connectedSize connectivity)
+        c'labelType = marshalDepth $ toDepth (Proxy :: Proxy depth)

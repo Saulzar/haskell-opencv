@@ -281,6 +281,9 @@ matAddWeighted src1 alpha src2 beta gamma = unsafeWrapException $ do
     c'gamma = realToFrac gamma
     c'dtype = maybe (-1) marshalDepth $ dsToMaybe $ toDepthDS (Proxy :: Proxy dstDepth)
 
+
+class WithPtr a => Compares mat a
+
 {- | Calculates the sum of a scaled array and another array.
 
 The function scaleAdd is one of the classical primitive linear algebra
@@ -331,6 +334,24 @@ matMax src1 src2 = unsafeWrapException $ do
           , *$(Mat * dstPtr)
           );
         |]
+
+-- scalarMax
+--     :: Mat shape channels depth -- ^
+--     -> Mat shape channels depth
+--     -> CvExcept (Mat shape channels depth)
+-- scalarMax src1 src2 = unsafeWrapException $ do
+--     dst <- newEmptyMat
+--     handleCvException (pure $ unsafeCoerceMat dst) $
+--       withPtr dst $ \dstPtr ->
+--       withPtr src1 $ \src1Ptr ->
+--       withPtr src2 $ \src2Ptr ->
+--         [cvExcept|
+--           cv::max
+--           ( *$(Mat * src1Ptr)
+--           , *$(Mat * src2Ptr)
+--           , *$(Mat * dstPtr)
+--           );
+--         |]
 
 --------------------------------------------------------------------------------
 -- Per element bitwise operations
