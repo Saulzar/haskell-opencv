@@ -68,6 +68,7 @@ import "this" OpenCV.Internal.Mutable
 import "this" OpenCV.TypeLevel
 import "transformers" Control.Monad.Trans.Except
 import qualified "vector" Data.Vector as V
+import qualified "vector-sized" Data.Vector.Sized as S
 
 --------------------------------------------------------------------------------
 
@@ -539,6 +540,8 @@ bitwiseXor src1 src2 = unsafeWrapException $ do
           );
         |]
 
+
+
 {- | Creates one multichannel array out of several single-channel ones.
 
 <http://docs.opencv.org/3.0-last-rst/modules/core/doc/operations_on_arrays.html#merge OpenCV Sphinx doc>
@@ -625,6 +628,31 @@ matSplit src = unsafePerformIO $
 
     c'numChans :: Int32
     c'numChans = fromIntegral numChans
+
+matSplitStatic
+    :: Mat shape channels depth -- ^
+    -> S.Vector d (Mat shape ('S 1) (S' d))
+matSplitStatic m = fromMaybe (error "matSplitStatic: internal error")
+    (toSized (matSplit m))
+
+
+
+-- class Channels (depth :: *) where
+--   type Channels depth :: * -> *
+--
+--
+-- instance Channels (S' 1) where
+--   type Channels (S' 1) = V1
+--
+-- instance Channels (S' 2) where
+--   type Channels (S' 1) = V2
+--
+-- instance Channels (S' 3) where
+--   type Channels (S' 4) = V3
+--
+-- instance Channels (S' 4) where
+--   type Channels (S' 4) = V4
+
 
 {- | Apply the same 1 dimensional action to every channel
 -}
