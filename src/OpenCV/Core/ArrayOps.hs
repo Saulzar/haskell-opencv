@@ -50,11 +50,12 @@ import "base" Foreign.Ptr ( Ptr )
 import "base" Foreign.Storable ( Storable(..), peek )
 import "base" GHC.TypeLits
 import "base" Data.Int ( Int32 )
+import "base" Data.Maybe (fromJust)
 import "base" System.IO.Unsafe ( unsafePerformIO )
 import qualified "inline-c" Language.C.Inline as C
 import qualified "inline-c-cpp" Language.C.Inline.Cpp as C
 import "linear" Linear.Vector ( zero )
-import "linear" Linear.V2 ( V2(..) )
+import "linear" Linear (V1 (..), V2(..), V3 (..), V4(..) )
 import "primitive" Control.Monad.Primitive ( PrimMonad, PrimState, unsafePrimToPrim )
 import "this" OpenCV.Core.Types.Mat
 import "this" OpenCV.Core.Types.Point
@@ -283,7 +284,6 @@ matAddWeighted src1 alpha src2 beta gamma = unsafeWrapException $ do
     c'dtype = maybe (-1) marshalDepth $ dsToMaybe $ toDepthDS (Proxy :: Proxy dstDepth)
 
 
-class WithPtr a => Compares mat a
 
 {- | Calculates the sum of a scaled array and another array.
 
@@ -564,6 +564,17 @@ matMerge srcVec = unsafePerformIO $ do
   where
     c'srcVecLength = fromIntegral $ V.length srcVec
 
+
+matMergeStatic
+    :: KnownNat channels => S.Vector channels (Mat shape ('S 1) depth)
+    -> Mat shape ('S channels) depth
+matMergeStatic = unsafeCoerceMat . matMerge . S.fromSized
+
+matMergeFixed
+    :: FixedSize channels => Fixed channels (Mat shape ('S 1) depth)
+    -> Mat shape ('S channels) depth
+matMergeFixed = matMergeStatic . unFixed
+
 {- | Divides a multi-channel array into several single-channel arrays.
 
 Example:
@@ -629,29 +640,51 @@ matSplit src = unsafePerformIO $
     c'numChans :: Int32
     c'numChans = fromIntegral numChans
 
+
 matSplitStatic
-    :: Mat shape channels depth -- ^
-    -> S.Vector d (Mat shape ('S 1) (S' d))
-matSplitStatic m = fromMaybe (error "matSplitStatic: internal error")
-    (toSized (matSplit m))
+    :: KnownNat channels => Mat shape ('S channels) depth -- ^
+    -> S.Vector channels (Mat shape ('S 1) depth)
+matSplitStatic = fromJust . S.toSized . matSplit
 
 
+matSplitFixed
+    :: (FixedSize channels) => Mat shape ('S channels) depth -- ^
+    -> Fixed channels (Mat shape ('S 1) depth)
+matSplitFixed = fixed . matSplitStatic
 
--- class Channels (depth :: *) where
---   type Channels depth :: * -> *
+class KnownNat n => FixedSize (n :: Nat) where
+  type Fixed n :: * -> *
+
+  fixed   :: S.Vector n a -> Fixed n a
+  unFixed :: Fixed n a    -> S.Vector n a
+
+
+instance FixedSize 2 where
+  type Fixed 2 = V2
+  fixed v = V2 (S.index' v (Proxy :: Proxy 0)) (S.index' v (Proxy :: Proxy 1))
+  unFixed (V2 a b) = fromJust (S.fromList [a, b])
+
+instance FixedSize 3 where
+  type Fixed 3 = V3
+  fixed v = V3 (S.index' v (Proxy :: Proxy 0)) (S.index' v (Proxy :: Proxy 1)) (S.index' v (Proxy :: Proxy 2))
+  unFixed (V3 a b c) = fromJust (S.fromList [a, b, c])
+
+instance FixedSize 4 where
+  type Fixed 4 = V4
+  fixed v = V4 (S.index' v (Proxy :: Proxy 0)) (S.index' v (Proxy :: Proxy 1)) (S.index' v (Proxy :: Proxy 2)) (S.index' v (Proxy :: Proxy 3))
+  unFixed (V4 a b c d) = fromJust (S.fromList [a, b, c, d])
+
+-- instance HasTuple 3 where
+--   type Tuple 3 a = (a, a, a)
 --
+--   tuple v = (S.index' v (Proxy :: Proxy 0), S.index' v (Proxy :: Proxy 1), S.index' v (Proxy :: Proxy 2))
+--   unTuple (a, b, c) = fromJust (S.fromList [a, b])
 --
--- instance Channels (S' 1) where
---   type Channels (S' 1) = V1
---
--- instance Channels (S' 2) where
---   type Channels (S' 1) = V2
---
--- instance Channels (S' 3) where
---   type Channels (S' 4) = V3
---
--- instance Channels (S' 4) where
---   type Channels (S' 4) = V4
+-- instance HasTuple 4 where
+--   type Tuple 4 a = (a, a, a, a)
+--   tuple v = (S.index' v (Proxy :: Proxy 0), S.index' v (Proxy :: Proxy 1), S.index' v (Proxy :: Proxy 2), S.index' v (Proxy :: Proxy 3))
+--   unTuple (a, b, c, d) = fromJust (S.fromList [a, b, c, d])
+
 
 
 {- | Apply the same 1 dimensional action to every channel
